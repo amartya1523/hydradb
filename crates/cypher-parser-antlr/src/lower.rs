@@ -818,6 +818,10 @@ fn tokenize(source: &str) -> Vec<Token> {
                 tokens.push(Token::Literal(Literal::Float(number.into())));
             } else if let Ok(value) = number.parse() {
                 tokens.push(Token::Literal(Literal::Integer(value)));
+            } else {
+                // Too large for any integer type. Skipping it would lower a
+                // different query, so reject the whole input instead.
+                return Vec::new();
             }
             continue;
         }

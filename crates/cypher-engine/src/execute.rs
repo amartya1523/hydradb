@@ -803,9 +803,14 @@ fn evaluate_group_expression(
                 .map(|item| evaluate_group_expression(item, rows))
                 .collect::<EngineResult<Vec<_>>>()?,
         )),
-        // A CASE wrapping an aggregate: each part is read over the group as
-        // it would be alone, and the branch is chosen from those values.
-        PhysicalExpression::Case { .. } if expression_contains_aggregate(expression) => {
+        // A CASE wrapping an aggregate, or one that reads no row: each part is
+        // read over the group as it would be alone, and the branch is chosen
+        // from those values. So a constant CASE still answers when the group
+        // is empty, like a constant function call.
+        PhysicalExpression::Case { .. }
+            if expression_contains_aggregate(expression)
+                || !expression_requires_row(expression) =>
+        {
             let mut evaluate = |part: &PhysicalExpression| {
                 evaluate_group_expression(part, rows).and_then(query_value_to_evaluated)
             };

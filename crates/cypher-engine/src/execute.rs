@@ -5333,3 +5333,34 @@ fn window_count(value: &BoundValue, field: &'static str) -> EngineResult<usize> 
 fn unsupported(bucket: QueryFailureReason, reason: impl Into<String>) -> EngineError {
     EngineError::UnsupportedPlan(bucket, reason.into())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::plan::ValueOrigin;
+
+    fn literal(value: ScalarValue) -> PhysicalExpression {
+        PhysicalExpression::Value(BoundValue {
+            value,
+            origin: ValueOrigin::Literal,
+        })
+    }
+
+    fn string(value: &str) -> ScalarValue {
+        ScalarValue::String(value.into())
+    }
+
+    #[test]
+    fn constant_case_evaluates_over_an_empty_group() {
+        // `CASE WHEN true THEN 'x' ELSE 'y' END` beside `count(*)` over no rows.
+        let case = PhysicalExpression::Case {
+            operand: None,
+            branches: vec![(literal(ScalarValue::Boolean(true)), literal(string("x")))],
+            default: Some(Box::new(literal(string("y")))),
+        };
+        assert_eq!(
+            evaluate_group_expression(&case, &[]).unwrap(),
+            QueryValue::Scalar(string("x"))
+        );
+    }
+}

@@ -23,6 +23,9 @@ const MAX_METADATA_ITEMS: usize = 1024 * 1024;
 const MAX_COLLECTION_ITEMS: usize = 64 * 1024 * 1024;
 const MAX_SINGLE_ALLOCATION_BYTES: usize = 2 * 1024 * 1024 * 1024;
 const MAX_IDENTITY_CHUNK_BYTES: usize = 16 * 1024 * 1024;
+// Arrays and maps nest by recursion, so the depth is bounded before it can
+// exhaust a decoder thread's stack. Real graph properties are nowhere near it.
+const MAX_VALUE_DEPTH: usize = 128;
 const MSB: u64 = 1 << 63;
 
 const SI_MAP: u64 = 1 << 0;
@@ -1162,7 +1165,7 @@ fn read_entities(
                     ),
                 })?;
             if properties
-                .insert(name.clone(), read_value(stream)?)
+                .insert(name.clone(), read_value(stream, 0)?)
                 .is_some()
             {
                 return invalid(
@@ -1183,7 +1186,14 @@ fn read_entities(
     Ok(())
 }
 
-fn read_value(stream: &mut TaggedStream) -> Result<PropertyValue> {
+fn read_value(stream: &mut TaggedStream, depth: usize) -> Result<PropertyValue> {
+    if depth > MAX_VALUE_DEPTH {
+        return invalid(
+            "property",
+            stream.offset(),
+            format!("property value nests deeper than {MAX_VALUE_DEPTH}"),
+        );
+    }
     let value_type = stream.unsigned()?;
     match value_type {
         SI_BOOL => Ok(PropertyValue::Bool(stream.signed()? != 0)),
@@ -1211,7 +1221,7 @@ fn read_value(stream: &mut TaggedStream) -> Result<PropertyValue> {
             let count = stream.metadata_count(declared, 9, "array length")?;
             let mut values = allocated_vec(count, "property array", stream.offset())?;
             for _ in 0..count {
-                values.push(read_value(stream)?);
+                values.push(read_value(stream, depth + 1)?);
             }
             Ok(PropertyValue::Array(values))
         }
@@ -1254,7 +1264,7 @@ fn read_value(stream: &mut TaggedStream) -> Result<PropertyValue> {
             let count = stream.metadata_count(declared, 19, "map length")?;
             let mut values = BTreeMap::new();
             for _ in 0..count {
-                values.insert(stream.c_string()?, read_value(stream)?);
+                values.insert(stream.c_string()?, read_value(stream, depth + 1)?);
             }
             Ok(PropertyValue::Map(values))
         }

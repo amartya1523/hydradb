@@ -932,3 +932,29 @@ fn tokenize(source: &str) -> Vec<Token> {
     }
     tokens
 }
+
+#[cfg(test)]
+mod tests {
+    use hydradb_cypher_ast::Statement;
+
+    fn lowers_to_query(source: &str) -> bool {
+        let document = crate::parse_cypher25(source).expect("valid Cypher 25");
+        matches!(document.statements.as_slice(), [Statement::Query(_)])
+    }
+
+    #[test]
+    fn oversized_integer_literal_is_not_dropped() {
+        assert!(!lowers_to_query(
+            "RETURN 340282366920938463463374607431768211456 - 1 AS x"
+        ));
+        assert!(!lowers_to_query(
+            "MATCH (n:Item) WHERE n.score > 340282366920938463463374607431768211456 - 5 RETURN n.id"
+        ));
+    }
+
+    #[test]
+    fn integer_literals_in_range_still_lower() {
+        assert!(lowers_to_query("RETURN 18446744073709551615 - 1 AS x"));
+        assert!(lowers_to_query("RETURN 5 - 1 AS x"));
+    }
+}

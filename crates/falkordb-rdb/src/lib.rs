@@ -2044,3 +2044,41 @@ fn truncated<T>(layer: &'static str, offset: usize, need: usize, have: usize) ->
         have,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn unsigned(out: &mut Vec<u8>, value: u64) {
+        out.push(4);
+        out.extend_from_slice(&value.to_le_bytes());
+    }
+
+    fn nested_arrays(depth: usize) -> TaggedStream {
+        let mut chunk = Vec::new();
+        for _ in 0..depth {
+            unsigned(&mut chunk, SI_ARRAY);
+            unsigned(&mut chunk, 1);
+        }
+        unsigned(&mut chunk, SI_NULL);
+        TaggedStream::new(vec![chunk])
+    }
+
+    #[test]
+    fn deeply_nested_property_is_rejected() {
+        // Import workers decode on threads with the default 2 MiB stack.
+        let result = std::thread::Builder::new()
+            .stack_size(2 * 1024 * 1024)
+            .spawn(|| read_value(&mut nested_arrays(200_000), 0).is_err())
+            .unwrap()
+            .join()
+            .unwrap();
+        assert!(result);
+    }
+
+    #[test]
+    fn nesting_up_to_the_limit_is_decoded() {
+        assert!(read_value(&mut nested_arrays(MAX_VALUE_DEPTH), 0).is_ok());
+        assert!(read_value(&mut nested_arrays(MAX_VALUE_DEPTH + 1), 0).is_err());
+    }
+}

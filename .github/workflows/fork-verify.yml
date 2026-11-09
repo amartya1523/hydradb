@@ -1,0 +1,21 @@
+name: fork verify
+
+on:
+  push:
+    branches: ["ci-verify/**"]
+  workflow_dispatch:
+
+jobs:
+  opencypher-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install native dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libcypher-parser-dev libgraphblas-dev pkg-config protobuf-compiler
+      - name: Install toolchain
+        run: rustup show
+      - uses: Swatinem/rust-cache@v2
+      - name: Unit tests (query::opencypher)
+        run: cargo test --locked --features opencypher --lib query::opencypher::tests -- --nocapture

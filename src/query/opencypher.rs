@@ -5652,3 +5652,80 @@ fn parse_error(reason: impl Into<String>) -> GraphError {
         reason: reason.into(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn row(query: &str) -> ParsedRowQuery {
+        parse_opencypher_row_query(query).expect("row query parses")
+    }
+
+    fn mutation(query: &str) -> Result<Option<ParsedMutationQuery>> {
+        parse_opencypher_mutation_query_with_parameters(query, &BTreeMap::new())
+    }
+
+    fn property(binding: &str, property: &str) -> RowProjection {
+        RowProjection::Property {
+            binding: binding.into(),
+            property: property.into(),
+        }
+    }
+
+    #[test]
+    fn mixed_case_id_projects_the_stored_property() {
+        let parsed = row("MATCH (a:E {id: 1}) RETURN a.ID AS ext, a.Id AS other, a.id AS id");
+        assert_eq!(
+            parsed.projections,
+            vec![
+                property("a", "ID"),
+                property("a", "Id"),
+                RowProjection::NodeId {
+                    binding: "a".into()
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn mixed_case_id_filters_on_the_stored_property() {
+        let parsed = row("MATCH (a:E) WHERE a.ID = 'ext-9' RETURN a.id");
+        assert_eq!(
+            parsed.predicate,
+            Some(RowPredicate::Compare {
+                left: RowExpression::Property {
+                    binding: "a".into(),
+                    property: "ID".into(),
+                },
+                op: RowComparisonOp::Eq,
+                right: RowExpression::Literal(VertexPropertyValue::String("ext-9".into())),
+            })
+        );
+    }
+
+    #[test]
+    fn set_and_remove_accept_a_mixed_case_id_property() {
+        let set = mutation("MATCH (a:E {id: 1}) SET a.ID = 'x'")
+            .expect("SET a.ID is supported")
+            .expect("SET a.ID runs on the mutation engine");
+        assert!(set.actions.contains(&RowMutationAction::SetProperty {
+            binding: "a".into(),
+            property: "ID".into(),
+            value: VertexPropertyValue::String("x".into()),
+        }));
+
+        let remove = mutation("MATCH (a:E {id: 1}) REMOVE a.Id")
+            .expect("REMOVE a.Id is supported")
+            .expect("REMOVE a.Id runs on the mutation engine");
+        assert!(remove.actions.contains(&RowMutationAction::RemoveProperty {
+            binding: "a".into(),
+            property: "Id".into(),
+        }));
+    }
+
+    #[test]
+    fn lowercase_id_stays_reserved() {
+        assert!(mutation("MATCH (a:E {id: 1}) SET a.id = 2").is_err());
+        assert!(mutation("MATCH (a:E {id: 1}) REMOVE a.id").is_err());
+    }
+}

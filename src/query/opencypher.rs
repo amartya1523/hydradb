@@ -2114,7 +2114,7 @@ fn unwind_vertex_upsert_template(
                         "UNWIND vertex SET property references the wrong node",
                     );
                 }
-                if property.eq_ignore_ascii_case("id") {
+                if property == "id" {
                     return unsupported(
                         QueryFailureReason::Unwind,
                         "UNWIND vertex SET cannot update node id",
@@ -2320,7 +2320,7 @@ fn unwind_relationship_set_fields(
                     "UNWIND relationship SET references the wrong relationship",
                 );
             }
-            if property.eq_ignore_ascii_case("id") {
+            if property == "id" {
                 return unsupported(
                     QueryFailureReason::Unwind,
                     "UNWIND relationship SET cannot update relationship id",
@@ -3971,7 +3971,7 @@ fn lower_set_actions(
                         "SET property requires <node>.<property>",
                     );
                 };
-                if property.eq_ignore_ascii_case("id") {
+                if property == "id" {
                     return unsupported(QueryFailureReason::Mutation, "SET cannot update node id");
                 }
                 validate_component("property", &property)?;
@@ -4041,7 +4041,7 @@ fn lower_remove_actions(remove_clause: *const AstNode) -> Result<Vec<RowMutation
                         "REMOVE property requires <node>.<property>",
                     );
                 };
-                if property.eq_ignore_ascii_case("id") {
+                if property == "id" {
                     return unsupported(
                         QueryFailureReason::Mutation,
                         "REMOVE cannot remove node id",

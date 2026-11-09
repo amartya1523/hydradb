@@ -5384,7 +5384,7 @@ fn is_count_star(expression: *const AstNode) -> Result<bool> {
 
 fn node_id_expression_binding(expression: *const AstNode) -> Result<Option<String>> {
     match property_expression_binding(expression)? {
-        Some((binding, property)) if property.eq_ignore_ascii_case("id") => Ok(Some(binding)),
+        Some((binding, property)) if property == "id" => Ok(Some(binding)),
         _ => Ok(None),
     }
 }
